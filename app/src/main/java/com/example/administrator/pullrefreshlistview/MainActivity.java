@@ -2,6 +2,7 @@ package com.example.administrator.pullrefreshlistview;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -18,7 +19,18 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        ListView listView=(RefreshableView)findViewById(R.id.list);
+        final RefreshableView listView=(RefreshableView)findViewById(R.id.list);
+        listView.setRefreshListener(new RefreshableView.RefreshListener() {
+            @Override
+            public void onRefresh() {
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        listView.finishRefresh();
+                    }
+                },3000);
+            }
+        });
         listView.setAdapter(new BaseAdapter() {
             @Override
             public int getCount() {

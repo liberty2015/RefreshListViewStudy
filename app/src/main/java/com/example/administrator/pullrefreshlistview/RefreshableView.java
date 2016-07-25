@@ -32,7 +32,8 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
     private int headerLayoutId;
     private View header;
     private float touchSlop;
-
+    private RotateAnimation upRotate,downRotate;
+    private boolean angleState=true;//true 为向下状态 false为向上状态
     /**
      * 下拉状态
      */
@@ -63,15 +64,6 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
     private int lastStatus=currentState;
 
     private boolean isDefaultHeader;
-
-    private Handler handler=new Handler(){
-        @Override
-        public void handleMessage(Message msg) {
-            if (msg.what==0x123){
-                finishRefresh();
-            }
-        }
-    };
 
     @Override
     public boolean onTouch(View view, MotionEvent motionEvent) {
@@ -149,15 +141,17 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
         if (lastStatus!=currentState){
             if (currentState==STATUS_PULL_REFRESH){
                 arrow.setVisibility(VISIBLE);
-                progressBar.setVisibility(GONE);
+                progressBar.setVisibility(INVISIBLE);
                 rotateArrow();
             }else if (currentState==STATUS_RELEASE_REFRESH){
                 arrow.setVisibility(VISIBLE);
-                progressBar.setProgress(GONE);
+                progressBar.setProgress(INVISIBLE);
                 rotateArrow();
             }else if (currentState==STATUS_REFRESHING){
+                arrow.startAnimation(downRotate);
+                angleState=true;
                 arrow.clearAnimation();
-                arrow.setVisibility(GONE);
+                arrow.setVisibility(INVISIBLE);
                 progressBar.setVisibility(VISIBLE);
             }
         }
@@ -171,7 +165,7 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
     }
 
     public RefreshableView(Context context) {
-        this(context,null);
+        this(context, null);
     }
 
     public RefreshableView(Context context, AttributeSet attrs) {
@@ -254,17 +248,31 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
         float pivotX=arrow.getWidth()/2f;
         float pivotY=arrow.getHeight()/2f;
         float fromDegree=0f,toDegree=0f;
-        if (currentState==STATUS_PULL_REFRESH){
-            fromDegree=180;
-            toDegree=360;
-        }else if (currentState==STATUS_RELEASE_REFRESH){
-            fromDegree=0;
-            toDegree=180;
+        if (upRotate==null){
+            upRotate=new RotateAnimation(0,180,pivotX,pivotY);
+            upRotate.setDuration(300);
+            upRotate.setFillAfter(true);
         }
-        RotateAnimation rotateAnimation=new RotateAnimation(fromDegree,toDegree,pivotX,pivotY);
-        rotateAnimation.setDuration(300);
-        rotateAnimation.setFillAfter(true);
-        arrow.startAnimation(rotateAnimation);
+        if (downRotate==null){
+            downRotate=new RotateAnimation(180,360,pivotX,pivotY);
+            downRotate.setDuration(300);
+            downRotate.setFillAfter(true);
+        }
+        if (currentState==STATUS_PULL_REFRESH&&!angleState){
+//            fromDegree=180;
+//            toDegree=360;
+            arrow.startAnimation(downRotate);
+            angleState=true;
+        }else if (currentState==STATUS_RELEASE_REFRESH&&angleState){
+//            fromDegree=0;
+//            toDegree=180;
+            arrow.startAnimation(upRotate);
+            angleState=false;
+        }
+//        RotateAnimation rotateAnimation=new RotateAnimation(fromDegree,toDegree,pivotX,pivotY);
+//        rotateAnimation.setDuration(300);
+//        rotateAnimation.setFillAfter(true);
+//        arrow.startAnimation(rotateAnimation);
     }
 
     /**
@@ -292,23 +300,27 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
         //将当前状态更新为正在刷新
         currentState=STATUS_REFRESHING;
         updateHeaderView();
+        refreshListView();
+//        /**
+//         * 模拟网络延时操作
+//         */
+//        new Thread(){
+//            @Override
+//            public void run() {
+//                try {
+//                    sleep(5*1000);
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
+//                handler.sendEmptyMessage(0x123);
+//            }
+//        }.start();
+    }
+
+    private void refreshListView(){
         if (refreshListener!=null){
             refreshListener.onRefresh();
         }
-        /**
-         * 模拟网络延时操作
-         */
-        new Thread(){
-            @Override
-            public void run() {
-                try {
-                    sleep(5*1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                handler.sendEmptyMessage(0x123);
-            }
-        }.start();
+//        finishRefresh();
     }
-
 }
