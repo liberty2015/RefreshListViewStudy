@@ -15,22 +15,27 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.animation.RotateAnimation;
+import android.widget.AbsListView;
+import android.widget.Adapter;
+import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import java.util.IllegalFormatCodePointException;
 
 /**
  * Created by Administrator on 2016/7/7.
  */
-public class RefreshableView extends ListView implements View.OnTouchListener{
+public class RefreshableView extends ListView implements View.OnTouchListener,AbsListView.OnScrollListener{
     private Context context;
     private int headerHeight;
     private float downY,distanceY;
     private int headerLayoutId;
     private View header;
+    private View footer;
     private float touchSlop;
     private RotateAnimation upRotate,downRotate;
     private boolean angleState=true;//true 为向下状态 false为向上状态
@@ -59,11 +64,23 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
 
     private ImageView arrow;
 
-    private RefreshListener refreshListener;
+    private TextView title;
+
+    private pullDownRefreshListener pullDownRefreshListener;
+
+    private pullUpRefreshListener pullUpRefreshListener;
 
     private int lastStatus=currentState;
 
     private boolean isDefaultHeader;
+
+    public void setPullDownRefreshListener(RefreshableView.pullDownRefreshListener pullDownRefreshListener) {
+        this.pullDownRefreshListener = pullDownRefreshListener;
+    }
+
+    public void setPullUpRefreshListener(RefreshableView.pullUpRefreshListener pullUpRefreshListener) {
+        this.pullUpRefreshListener = pullUpRefreshListener;
+    }
 
     @Override
     public boolean onTouch(View view, MotionEvent motionEvent) {
@@ -130,7 +147,13 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
      * 当刷新逻辑完成后，将当前状态修改为完成状态
      */
     public void finishRefresh(){
+//        Adapter adapter=getAdapter();
+//
+//        //if (adapter instanceof BaseAdapter){
+//            ((BaseAdapter)adapter).notifyDataSetChanged();
+//        //}
         currentState=STATUS_REFRESH_FINISHED;
+        title.setText("下拉刷新");
         hideHeaderAnimation();
     }
 
@@ -150,6 +173,7 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
             }else if (currentState==STATUS_REFRESHING){
                 arrow.startAnimation(downRotate);
                 angleState=true;
+                title.setText("正在刷新");
                 arrow.clearAnimation();
                 arrow.setVisibility(INVISIBLE);
                 progressBar.setVisibility(VISIBLE);
@@ -157,11 +181,34 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
         }
     }
 
+
+    @Override
+    public void onScrollStateChanged(AbsListView view, int scrollState) {
+        if (scrollState==OnScrollListener.SCROLL_STATE_IDLE){
+            if (view.getLastVisiblePosition()==view.getCount()-1&&pullUpRefreshListener!=null){
+                pullUpRefreshListener.onRefresh();
+
+            }
+        }
+    }
+
+    @Override
+    public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+
+    }
+
     /**
-     *
+     *下拉刷新监听器
      */
-    public interface RefreshListener{
+    public interface pullDownRefreshListener{
         public void onRefresh();
+    }
+
+    /**
+     * 上拉刷新监听器
+     */
+    public interface pullUpRefreshListener{
+       public void onRefresh();
     }
 
     public RefreshableView(Context context) {
@@ -173,23 +220,27 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
         TypedArray typedArray=context.obtainStyledAttributes(attrs,R.styleable.RefreshableView);
         headerLayoutId=typedArray.getResourceId(R.styleable.RefreshableView_top_header, R.layout.header_layout);
         header= LayoutInflater.from(context).inflate(headerLayoutId, this, false);
+        footer=LayoutInflater.from(context).inflate(R.layout.footer_layout, this, false);
         addHeaderView(header);
+        addFooterView(footer);
         touchSlop= ViewConfiguration.get(context).getScaledTouchSlop();
         setOnTouchListener(this);
         if (headerLayoutId==R.layout.header_layout){
             initView();
             isDefaultHeader=true;
         }
+        setOnScrollListener(this);
     }
+
+
 
     private void initView(){
         progressBar= (ProgressBar) header.findViewById(R.id.progress);
         arrow= (ImageView) header.findViewById(R.id.arrow);
+        title= (TextView) header.findViewById(R.id.title);
     }
 
-    public void setRefreshListener(RefreshListener refreshListener) {
-        this.refreshListener = refreshListener;
-    }
+
 
     /**
      * 判断当前是否允许下拉刷新
@@ -214,6 +265,8 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
             ableToPull=true;
         }
     }
+
+
 
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
@@ -318,8 +371,8 @@ public class RefreshableView extends ListView implements View.OnTouchListener{
     }
 
     private void refreshListView(){
-        if (refreshListener!=null){
-            refreshListener.onRefresh();
+        if (pullDownRefreshListener!=null){
+            pullDownRefreshListener.onRefresh();
         }
 //        finishRefresh();
     }
