@@ -5,6 +5,11 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity">
+    <android.support.v7.widget.Toolbar
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:background="#42a0fd">
+    </android.support.v7.widget.Toolbar>
     <com.example.administrator.pullrefreshlistview.RefreshableView
         android:id="@+id/list"
         android:layout_width="match_parent"

@@ -1,6 +1,8 @@
 package com.example.administrator.pullrefreshlistview;
 
+import android.animation.IntEvaluator;
 import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
@@ -10,18 +12,24 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.animation.RotateAnimation;
 import android.widget.AbsListView;
 import android.widget.Adapter;
+import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import java.util.IllegalFormatCodePointException;
@@ -32,12 +40,14 @@ import java.util.IllegalFormatCodePointException;
 public class RefreshableView extends ListView implements View.OnTouchListener,AbsListView.OnScrollListener{
     private Context context;
     private int headerHeight;
+    private FrameLayout content_container;
     private float downY,distanceY;
     private int headerLayoutId;
     private View header;
     private View footer;
     private float touchSlop;
     private RotateAnimation upRotate,downRotate;
+    private RelativeLayout headerContainer;
     private boolean angleState=true;//true 为向下状态 false为向上状态
     /**
      * 下拉状态
@@ -72,6 +82,8 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
 
     private int lastStatus=currentState;
 
+    private boolean itemCanClick=true;
+
     private boolean isDefaultHeader;
 
     public void setPullDownRefreshListener(RefreshableView.pullDownRefreshListener pullDownRefreshListener) {
@@ -80,6 +92,27 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
 
     public void setPullUpRefreshListener(RefreshableView.pullUpRefreshListener pullUpRefreshListener) {
         this.pullUpRefreshListener = pullUpRefreshListener;
+    }
+
+    @Override
+    public void setOnItemClickListener(OnItemClickListener listener) {
+        super.setOnItemClickListener(listener);
+    }
+
+    /**
+     * 下拉刷新时屏蔽item单击事件
+     * @param view
+     * @param position
+     * @param id
+     * @return
+     */
+    @Override
+    public boolean performItemClick(View view, int position, long id) {
+        if (itemCanClick){
+            return super.performItemClick(view, position, id);
+        }else {
+            return false;
+        }
     }
 
     @Override
@@ -99,7 +132,7 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
                     /**
                      *当滑动状态属于往下滑动的状态，，并且下拉头完全隐藏时屏蔽下拉事件
                      */
-                    if (distanceY<=0&&getY()<=headerHeight){
+                    if (distanceY<=0&&getHeaderHeight()<=headerHeight){
                         return false;
                     }
                     if (distanceY<touchSlop){
@@ -109,12 +142,12 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
                         /**
                          * 判断下拉头是否完全出现
                          */
-                        if (getY()>=0){
+                        if (getHeaderHeight()>=headerHeight){
                             currentState=STATUS_RELEASE_REFRESH;
                         }else {
                             currentState=STATUS_PULL_REFRESH;
                         }
-                        setY(distanceY/2+headerHeight);
+                        setHeaderHeight((int)(distanceY/2));
                     }
                     break;
                 case MotionEvent.ACTION_UP:
@@ -135,6 +168,8 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
                 setPressed(false);
                 setFocusable(false);
                 setFocusableInTouchMode(false);
+                setItemsCanFocus(false);
+                itemCanClick=false;
                 lastStatus=currentState;
                 //当正处于下拉或释放状态时，通过返回true屏蔽掉listview的OnTouch滚动触摸事件
                 return true;
@@ -147,13 +182,18 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
      * 当刷新逻辑完成后，将当前状态修改为完成状态
      */
     public void finishRefresh(){
-//        Adapter adapter=getAdapter();
-//
-//        //if (adapter instanceof BaseAdapter){
-//            ((BaseAdapter)adapter).notifyDataSetChanged();
-//        //}
         currentState=STATUS_REFRESH_FINISHED;
         title.setText("下拉刷新");
+        hideHeaderAnimation();
+    }
+
+    public void finishRefresh(BaseAdapter adapter){
+        if (adapter!=null){
+            adapter.notifyDataSetChanged();
+        }
+        currentState=STATUS_REFRESH_FINISHED;
+        title.setText("下拉刷新");
+        itemCanClick=true;
         hideHeaderAnimation();
     }
 
@@ -208,7 +248,7 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
      * 上拉刷新监听器
      */
     public interface pullUpRefreshListener{
-       public void onRefresh();
+        public void onRefresh();
     }
 
     public RefreshableView(Context context) {
@@ -221,7 +261,11 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
         headerLayoutId=typedArray.getResourceId(R.styleable.RefreshableView_top_header, R.layout.header_layout);
         header= LayoutInflater.from(context).inflate(headerLayoutId, this, false);
         footer=LayoutInflater.from(context).inflate(R.layout.footer_layout, this, false);
-        addHeaderView(header);
+        content_container= (FrameLayout) header.findViewById(R.id.content_container);
+        RelativeLayout.LayoutParams params=new RelativeLayout.LayoutParams (ViewGroup.LayoutParams.MATCH_PARENT,0);
+        headerContainer=new RelativeLayout(context);
+        headerContainer.addView(header,params);
+        addHeaderView(headerContainer);
         addFooterView(footer);
         touchSlop= ViewConfiguration.get(context).getScaledTouchSlop();
         setOnTouchListener(this);
@@ -229,10 +273,29 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
             initView();
             isDefaultHeader=true;
         }
+        headerContainer.getViewTreeObserver().addOnGlobalLayoutListener(
+                new ViewTreeObserver.OnGlobalLayoutListener() {
+                    @Override
+                    public void onGlobalLayout() {
+                        headerHeight=content_container.getHeight();
+                        Log.d("xxxxxxx","headerHeight="+headerHeight);
+                        getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                    }
+                }
+        );
         setOnScrollListener(this);
     }
 
 
+    private int getHeaderHeight(){
+        return header.getLayoutParams().height;
+    }
+
+    private void setHeaderHeight(int height){
+        RelativeLayout.LayoutParams params= (RelativeLayout.LayoutParams) header.getLayoutParams();
+        params.height=height;
+        header.setLayoutParams(params);
+    }
 
     private void initView(){
         progressBar= (ProgressBar) header.findViewById(R.id.progress);
@@ -256,8 +319,8 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
                 }
                 ableToPull=true;
             }else {
-                if (getY()!=headerHeight){
-                    setY(headerHeight);
+                if (getHeaderHeight()!=0){
+                    setHeaderHeight(0);
                 }
                 ableToPull=false;
             }
@@ -266,22 +329,6 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
         }
     }
 
-
-
-    @Override
-    protected void onLayout(boolean changed, int l, int t, int r, int b) {
-        super.onLayout(changed, l, t, r, b);
-        headerHeight=-header.getHeight();
-        setY(headerHeight);
-    }
-
-    @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int size=MeasureSpec.getSize(heightMeasureSpec)-headerHeight;
-        int mode=MeasureSpec.getMode(heightMeasureSpec);
-        int expandHeight=MeasureSpec.makeMeasureSpec(size,mode);
-        super.onMeasure(widthMeasureSpec, expandHeight);
-    }
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -300,7 +347,6 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
     private void rotateArrow(){
         float pivotX=arrow.getWidth()/2f;
         float pivotY=arrow.getHeight()/2f;
-        float fromDegree=0f,toDegree=0f;
         if (upRotate==null){
             upRotate=new RotateAnimation(0,180,pivotX,pivotY);
             upRotate.setDuration(300);
@@ -312,32 +358,38 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
             downRotate.setFillAfter(true);
         }
         if (currentState==STATUS_PULL_REFRESH&&!angleState){
-//            fromDegree=180;
-//            toDegree=360;
             arrow.startAnimation(downRotate);
             angleState=true;
         }else if (currentState==STATUS_RELEASE_REFRESH&&angleState){
-//            fromDegree=0;
-//            toDegree=180;
             arrow.startAnimation(upRotate);
             angleState=false;
         }
-//        RotateAnimation rotateAnimation=new RotateAnimation(fromDegree,toDegree,pivotX,pivotY);
-//        rotateAnimation.setDuration(300);
-//        rotateAnimation.setFillAfter(true);
-//        arrow.startAnimation(rotateAnimation);
     }
 
     /**
      * 隐藏头
      */
     private void hideHeaderAnimation(){
-        ObjectAnimator animator=ObjectAnimator.ofFloat(this,"y",getY(),headerHeight);
-        animator.setDuration(100);
-        animator.start();
+        performAnimate(headerContainer,getHeaderHeight(),0);
         currentState=STATUS_REFRESH_FINISHED;
     }
 
+
+    private void performAnimate(final View target, final int start, final int end){
+        ValueAnimator valueAnimator=ValueAnimator.ofInt(start,end);
+        valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            private IntEvaluator mEvaluator=new IntEvaluator();
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                int currentValue= (int) animation.getAnimatedValue();
+                Log.d("xxxxx","current value:"+currentValue);
+                float fraction=animation.getAnimatedFraction();
+                setHeaderHeight(mEvaluator.evaluate(fraction,start,end));
+                target.requestLayout();
+            }
+        });
+        valueAnimator.setDuration(100).start();
+    }
     /**
      * 更新头
      */
@@ -345,35 +397,18 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
         /**
          * 若列表当前y坐标不为0，则使用属性动画移动到0
          */
-        if (getY()>0){
-            ObjectAnimator animator=ObjectAnimator.ofFloat(this,"y",getY(),0);
-            animator.setDuration(100);
-            animator.start();
+        if (getHeaderHeight()>0){
+            performAnimate(header,getHeaderHeight(),headerHeight);
         }
         //将当前状态更新为正在刷新
         currentState=STATUS_REFRESHING;
         updateHeaderView();
         refreshListView();
-//        /**
-//         * 模拟网络延时操作
-//         */
-//        new Thread(){
-//            @Override
-//            public void run() {
-//                try {
-//                    sleep(5*1000);
-//                } catch (InterruptedException e) {
-//                    e.printStackTrace();
-//                }
-//                handler.sendEmptyMessage(0x123);
-//            }
-//        }.start();
     }
 
     private void refreshListView(){
         if (pullDownRefreshListener!=null){
             pullDownRefreshListener.onRefresh();
         }
-//        finishRefresh();
     }
 }
