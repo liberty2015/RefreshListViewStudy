@@ -1,16 +1,8 @@
 package com.example.administrator.pullrefreshlistview;
 
-import android.animation.IntEvaluator;
-import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
 import android.content.Context;
-import android.content.res.Configuration;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
-import android.os.AsyncTask;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -22,8 +14,6 @@ import android.view.ViewTreeObserver;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.RotateAnimation;
 import android.widget.AbsListView;
-import android.widget.Adapter;
-import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -33,8 +23,6 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.Scroller;
 import android.widget.TextView;
-
-import java.util.IllegalFormatCodePointException;
 
 /**
  * Created by Administrator on 2016/7/7.
@@ -207,12 +195,12 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
                         return false;
                     }
                     if (currentState!=STATUS_UP_REFRESHING){
-                        if (getFooterMargin()>0){
+                        if (getFooterMargin()>50){
                             currentState=STATUS_UP_RELEASE_REFRESH;
-                        }else if (getFooterMargin()==0){
+                            ((TextView)footer.findViewById(R.id.know_more)).setText("松开加载更多");
+                        }else if (getFooterMargin()>=0&&getFooterMargin()<=50){
                             currentState=STATUS_UP_PULL_REFRESH;
                         }
-                        ((TextView)footer.findViewById(R.id.know_more)).setText("松开加载更多");
                         setFooterMargin((int) (getFooterMargin()+(-distanceY/2)));
                     }
                     break;
