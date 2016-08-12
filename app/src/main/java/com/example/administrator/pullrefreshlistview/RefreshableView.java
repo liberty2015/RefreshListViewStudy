@@ -44,7 +44,6 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
     private int headerHeight,footerHeight;
     private FrameLayout content_container;
     private LinearLayout footerContent_container;
-//    private int NO_PULL=0;
     private int DOWN_PULL=0;
     private int UP_PULL=2;
     private int SCROLL_STATUS;
@@ -168,7 +167,6 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
                         }else if(getHeaderHeight()<headerHeight){
                             currentState=STATUS_DOWN_PULL_REFRESH;
                         }
-
                         setHeaderHeight((int)(distanceY/2));
                     }
                     break;
@@ -445,9 +443,9 @@ public class RefreshableView extends ListView implements View.OnTouchListener,Ab
     }
 
     private void setIsAbleToUpPull(MotionEvent ev){
-        int count=getChildCount();
+        int count=getCount()-2;
         if (count>0){
-            if (footerContainer.getBottom()==getHeight()){
+            if (getLastVisiblePosition()==(getCount()-1)){
                 if (!ableToUpPull){
                     downY=ev.getRawY();
                 }
